@@ -1,0 +1,71 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <title>O2 Tickets — Dua Lipa Live</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="stylesheet" href="/css/styles.css" />
+</head>
+<body>
+  <div id="site-nav"></div>
+
+  <main>
+    <section class="hero-stage">
+      <div class="mx-auto max-w-6xl px-4 py-14 sm:py-20 fade-in">
+        <p class="text-rose-200 text-sm font-semibold uppercase tracking-[0.2em] mb-3" data-content="homepage.eyebrow">The O2 Arena · London</p>
+        <h1 class="brand-mark text-4xl sm:text-5xl md:text-6xl text-white leading-tight max-w-xl">
+          O2 <span class="text-rose-300">TICKETS</span>
+        </h1>
+        <p class="mt-4 text-lg sm:text-xl text-slate-100 max-w-lg" data-content="homepage.subhead">
+          Dua Lipa — 30 November 2026. Sales open now for registered fans.
+        </p>
+        <div class="mt-8 flex flex-col sm:flex-row gap-3">
+          <a href="/pages/tickets.html" class="btn-primary" data-content="homepage.ctaPrimary">Get tickets</a>
+          <a href="/pages/auth.html" class="btn-ghost border-white/40 text-white hover:bg-white/10" data-content="homepage.ctaSecondary">Register for discounts</a>
+        </div>
+      </div>
+    </section>
+
+    <section class="mx-auto max-w-6xl px-4 py-12">
+      <h2 class="text-2xl font-extrabold tracking-tight" data-content="homepage.detailsTitle">Event details</h2>
+      <p class="mt-2 text-slate-600 max-w-2xl" data-content="homepage.detailsIntro">One night only at The O2.</p>
+
+      <div class="mt-8 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+        <article class="stat-tile fade-in">
+          <h3 class="font-bold">When</h3>
+          <p class="mt-1 text-slate-600" data-content="event.dateLabel">30 November 2026</p>
+        </article>
+        <article class="stat-tile fade-in" style="animation-delay:0.08s">
+          <h3 class="font-bold">Where</h3>
+          <p class="mt-1 text-slate-600"><span data-content="event.venue">The O2 Arena</span>, <span data-content="event.city">London</span></p>
+        </article>
+        <article class="stat-tile fade-in sm:col-span-2 lg:col-span-1" style="animation-delay:0.16s">
+          <h3 class="font-bold">Registered discounts</h3>
+          <p class="mt-1 text-slate-600" data-content="discountsBanner.registeredHint">July 10% · August 5% · September 10%</p>
+        </article>
+      </div>
+
+      <div class="mt-10 rounded-2xl bg-white/80 border border-slate-200 p-5 sm:p-8">
+        <h2 class="text-xl font-extrabold" data-content="homepage.goodToKnowTitle">Good to know</h2>
+        <ul class="mt-3 space-y-2 text-slate-600 list-disc pl-5" data-content-list="homepage.goodToKnow"></ul>
+        <a href="/pages/tickets.html" class="btn-secondary mt-6 inline-flex min-h-[44px]">Browse ticket types</a>
+      </div>
+    </section>
+  </main>
+
+  <footer class="border-t border-slate-200 mt-8 py-8 text-center text-sm text-slate-500">
+    O2 Ticket Booking · University assignment · Simulated payments · Real SMTP emails when configured
+  </footer>
+
+  <script src="/js/api.js"></script>
+  <script src="/js/auth.js"></script>
+  <script src="/js/cart.js"></script>
+  <script src="/js/content.js"></script>
+  <script src="/js/nav.js"></script>
+  <script>
+    initNav('home');
+    loadSiteContent();
+  </script>
+</body>
+</html>

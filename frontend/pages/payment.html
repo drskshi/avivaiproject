@@ -1,0 +1,66 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <title>Payment — O2 Tickets</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="stylesheet" href="/css/styles.css" />
+</head>
+<body>
+  <div id="site-nav"></div>
+  <main class="mx-auto max-w-md px-4 py-8">
+    <h1 class="text-2xl font-extrabold">Simulated payment</h1>
+    <p class="mt-2 text-sm text-amber-800 bg-amber-50 border border-amber-200 rounded-xl p-3">
+      Demo only — do <strong>not</strong> enter a real card. Nothing is charged or stored as a real PAN.
+    </p>
+    <p class="mt-4 text-lg font-bold">Amount due: <span id="amount">£0.00</span></p>
+
+    <form id="pay-form" class="mt-6 space-y-3">
+      <input class="input-field" name="cardHolder" placeholder="Name on card" required />
+      <input class="input-field" name="fakeNumber" placeholder="Card number (use 4242 4242 4242 4242)" value="4242 4242 4242 4242" required />
+      <div class="grid grid-cols-2 gap-3">
+        <input class="input-field" name="exp" placeholder="MM/YY" value="12/28" required />
+        <input class="input-field" name="cvc" placeholder="CVC" value="123" required />
+      </div>
+      <label class="flex items-center gap-2 text-sm">
+        <input type="checkbox" id="simulate-fail" /> Simulate failed payment
+      </label>
+      <button class="btn-primary w-full" type="submit">Pay now</button>
+    </form>
+    <p id="err" class="hidden mt-4 text-rose-700 text-sm"></p>
+  </main>
+  <script src="/js/api.js"></script>
+  <script src="/js/auth.js"></script>
+  <script src="/js/cart.js"></script>
+  <script src="/js/nav.js"></script>
+  <script>
+    initNav('cart');
+    if (!Auth.requireAuth()) throw new Error('auth');
+    const orderId = sessionStorage.getItem('pendingOrderId');
+    const total = sessionStorage.getItem('pendingOrderTotal');
+    if (!orderId) location.href = '/pages/cart.html';
+    document.getElementById('amount').textContent = `£${Number(total || 0).toFixed(2)}`;
+
+    document.getElementById('pay-form').onsubmit = async (e) => {
+      e.preventDefault();
+      const err = document.getElementById('err');
+      err.classList.add('hidden');
+      try {
+        // Fake fields are UI-only — API never receives raw card numbers
+        const data = await API.post(`/orders/${orderId}/pay`, {
+          cardHolder: e.target.cardHolder.value,
+          simulateFail: document.getElementById('simulate-fail').checked,
+        });
+        Cart.clear();
+        sessionStorage.setItem('lastConfirmation', JSON.stringify(data));
+        sessionStorage.removeItem('pendingOrderId');
+        location.href = '/pages/confirmation.html';
+      } catch (ex) {
+        err.textContent = ex.message;
+        err.classList.remove('hidden');
+      }
+    };
+  </script>
+</body>
+</html>

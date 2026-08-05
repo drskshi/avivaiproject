@@ -1,0 +1,567 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <title>Admin — O2 Tickets</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+  <link rel="stylesheet" href="/css/styles.css" />
+</head>
+<body>
+  <div id="site-nav"></div>
+  <main class="mx-auto max-w-6xl px-4 py-8">
+    <h1 class="text-2xl sm:text-3xl font-extrabold">Admin dashboard</h1>
+    <p class="mt-2 text-slate-600">Edit ticket types, discounts, users, tickets — and browse live MongoDB data.</p>
+    <p id="msg" class="hidden mt-4 rounded-xl p-3 text-sm"></p>
+
+    <!-- Section tabs -->
+    <div class="mt-6 flex gap-2 overflow-x-auto pb-1">
+      <button type="button" data-panel="stats" class="panel-tab btn-primary text-sm whitespace-nowrap px-4 py-2 min-h-0">Stats</button>
+      <button type="button" data-panel="types" class="panel-tab btn-ghost text-sm whitespace-nowrap px-4 py-2 min-h-0">Edit ticket types</button>
+      <button type="button" data-panel="discounts" class="panel-tab btn-ghost text-sm whitespace-nowrap px-4 py-2 min-h-0">Discounts</button>
+      <button type="button" data-panel="tickets" class="panel-tab btn-ghost text-sm whitespace-nowrap px-4 py-2 min-h-0">Tickets</button>
+      <button type="button" data-panel="users" class="panel-tab btn-ghost text-sm whitespace-nowrap px-4 py-2 min-h-0">Users</button>
+      <button type="button" data-panel="data" class="panel-tab btn-ghost text-sm whitespace-nowrap px-4 py-2 min-h-0">Database</button>
+    </div>
+
+    <!-- STATS -->
+    <div id="panel-stats" class="panel-section mt-6">
+      <section class="rounded-2xl border border-slate-200 bg-white p-4 sm:p-5">
+        <h2 class="font-extrabold text-lg">QR / ticket number lookup</h2>
+        <form id="lookup-form" class="mt-3 flex flex-col sm:flex-row gap-2">
+          <input id="lookup-q" class="input-field flex-1" placeholder="Paste ticket number (e.g. O2-ABC123...)" required />
+          <button class="btn-primary" type="submit">Look up</button>
+        </form>
+        <div id="lookup-result" class="mt-4"></div>
+      </section>
+      <section class="mt-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-4" id="stat-tiles"></section>
+      <section class="mt-6 grid gap-4 lg:grid-cols-2">
+        <div class="rounded-2xl border border-slate-200 bg-white p-4">
+          <h3 class="font-bold mb-2">Tickets sold by type</h3>
+          <canvas id="chart-sold" height="220"></canvas>
+        </div>
+        <div class="rounded-2xl border border-slate-200 bg-white p-4">
+          <h3 class="font-bold mb-2">Attendee age groups</h3>
+          <canvas id="chart-age" height="220"></canvas>
+        </div>
+        <div class="rounded-2xl border border-slate-200 bg-white p-4">
+          <h3 class="font-bold mb-2">Registered vs guest</h3>
+          <canvas id="chart-customers" height="220"></canvas>
+        </div>
+        <div class="rounded-2xl border border-slate-200 bg-white p-4">
+          <h3 class="font-bold mb-2">Remaining inventory</h3>
+          <canvas id="chart-stock" height="220"></canvas>
+        </div>
+      </section>
+    </div>
+
+    <!-- TICKET TYPES EDIT -->
+    <div id="panel-types" class="panel-section mt-6 hidden">
+      <h2 class="font-extrabold text-lg">Edit ticket types</h2>
+      <p class="text-sm text-slate-600 mt-1">Change prices, stock, descriptions, and refund/amend rules. Saved to MongoDB instantly.</p>
+      <div id="types-list" class="mt-4 space-y-4"></div>
+    </div>
+
+    <!-- DISCOUNTS -->
+    <div id="panel-discounts" class="panel-section mt-6 hidden">
+      <h2 class="font-extrabold text-lg">Discount rules</h2>
+      <div id="discounts-list" class="mt-4 space-y-3"></div>
+      <form id="discount-create" class="mt-6 rounded-2xl border border-slate-200 bg-white p-4 space-y-3">
+        <h3 class="font-bold">Add discount</h3>
+        <input class="input-field" name="name" placeholder="Name" required />
+        <input class="input-field" name="percentOff" type="number" min="0" max="100" placeholder="% off" required />
+        <label class="text-sm font-semibold block">Start <input class="input-field mt-1" name="startDate" type="date" required /></label>
+        <label class="text-sm font-semibold block">End <input class="input-field mt-1" name="endDate" type="date" required /></label>
+        <label class="flex items-center gap-2 text-sm"><input type="checkbox" name="registeredOnly" checked /> Registered users only</label>
+        <button class="btn-primary" type="submit">Create discount</button>
+      </form>
+    </div>
+
+    <!-- TICKETS -->
+    <div id="panel-tickets" class="panel-section mt-6 hidden">
+      <h2 class="font-extrabold text-lg">Manage tickets</h2>
+      <p class="text-sm text-slate-600 mt-1">Cancel, upgrade, or edit attendee details / status.</p>
+      <div id="tickets-admin" class="mt-4 space-y-3"></div>
+    </div>
+
+    <!-- USERS -->
+    <div id="panel-users" class="panel-section mt-6 hidden">
+      <h2 class="font-extrabold text-lg">Manage users</h2>
+      <p class="text-sm text-slate-600 mt-1">Delete removes the user <strong>and</strong> their tickets, orders, and payments from MongoDB.</p>
+      <div class="mt-3 overflow-x-auto rounded-2xl border border-slate-200 bg-white">
+        <table class="min-w-full text-sm">
+          <thead class="bg-slate-50 text-left">
+            <tr>
+              <th class="p-3">Name</th>
+              <th class="p-3">Email</th>
+              <th class="p-3">Role</th>
+              <th class="p-3">Guest</th>
+              <th class="p-3">Actions</th>
+            </tr>
+          </thead>
+          <tbody id="users-body"></tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- DATABASE BROWSER -->
+    <div id="panel-data" class="panel-section mt-6 hidden">
+      <h2 class="font-extrabold text-lg">Database browser</h2>
+      <p class="text-sm text-slate-600 mt-1">Live data from MongoDB Atlas database <code class="bg-slate-100 px-1 rounded">o2-ticket-booking</code>.</p>
+
+      <div class="mt-4 rounded-2xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-950">
+        <p class="font-bold">Also view in MongoDB Atlas (full UI):</p>
+        <ol class="list-decimal pl-5 mt-2 space-y-1">
+          <li>Open <a class="underline font-semibold" href="https://cloud.mongodb.com" target="_blank" rel="noopener">cloud.mongodb.com</a> and sign in</li>
+          <li>Click your cluster → <strong>Browse Collections</strong></li>
+          <li>Open database <strong>o2-ticket-booking</strong></li>
+          <li>Collections: <code>users</code>, <code>tickettypes</code>, <code>tickets</code>, <code>orders</code>, <code>payments</code>, <code>discounts</code></li>
+        </ol>
+        <p class="mt-2">Optional desktop app: <a class="underline font-semibold" href="https://www.mongodb.com/products/tools/compass" target="_blank" rel="noopener">MongoDB Compass</a> — paste your <code>MONGODB_URI</code> from <code>.env</code>.</p>
+      </div>
+
+      <div id="data-counts" class="mt-4 grid gap-3 sm:grid-cols-3 lg:grid-cols-6"></div>
+      <div class="mt-4 flex flex-wrap gap-2" id="data-tabs"></div>
+      <pre id="data-json" class="mt-4 max-h-[480px] overflow-auto rounded-2xl bg-slate-900 text-slate-100 text-xs p-4"></pre>
+    </div>
+  </main>
+
+  <!-- Edit ticket modal -->
+  <div id="ticket-modal" class="hidden fixed inset-0 z-50 bg-black/50 p-4 overflow-y-auto">
+    <div class="mx-auto my-8 max-w-lg rounded-2xl bg-white p-5">
+      <h2 class="font-extrabold text-lg">Edit ticket</h2>
+      <form id="ticket-edit-form" class="mt-4 space-y-3">
+        <input type="hidden" name="id" />
+        <label class="block text-sm font-semibold">Status
+          <select name="status" class="input-field mt-1">
+            <option value="valid">valid</option>
+            <option value="amended">amended</option>
+            <option value="used">used</option>
+            <option value="cancelled">cancelled</option>
+          </select>
+        </label>
+        <label class="block text-sm font-semibold">Amount paid (£)
+          <input name="amountPaid" type="number" step="0.01" min="0" class="input-field mt-1" />
+        </label>
+        <div id="attendee-edit-fields"></div>
+        <div class="flex gap-2">
+          <button class="btn-primary flex-1" type="submit">Save</button>
+          <button class="btn-ghost flex-1" type="button" id="ticket-modal-close">Close</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <script src="/js/api.js"></script>
+  <script src="/js/auth.js"></script>
+  <script src="/js/cart.js"></script>
+  <script src="/js/nav.js"></script>
+  <script>
+    initNav('admin');
+    if (!Auth.requireAuth()) throw new Error('auth');
+    if (!Auth.isAdmin()) {
+      document.body.innerHTML = '<p class="p-8">Admin access required. <a href="/">Home</a></p>';
+      throw new Error('admin');
+    }
+
+    const charts = {};
+    let cachedTickets = [];
+    let cachedData = null;
+
+    function flash(text, ok = true) {
+      const el = document.getElementById('msg');
+      el.textContent = text;
+      el.className = `mt-4 rounded-xl p-3 text-sm ${ok ? 'bg-teal-50 text-teal-800' : 'bg-rose-50 text-rose-800'}`;
+      el.classList.remove('hidden');
+      el.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    }
+
+    // Tabs
+    document.querySelectorAll('.panel-tab').forEach((btn) => {
+      btn.addEventListener('click', () => {
+        document.querySelectorAll('.panel-tab').forEach((b) => {
+          b.classList.remove('btn-primary');
+          b.classList.add('btn-ghost');
+        });
+        btn.classList.add('btn-primary');
+        btn.classList.remove('btn-ghost');
+        document.querySelectorAll('.panel-section').forEach((s) => s.classList.add('hidden'));
+        document.getElementById(`panel-${btn.dataset.panel}`).classList.remove('hidden');
+        if (btn.dataset.panel === 'data') loadDataBrowser();
+      });
+    });
+
+    function upsertChart(id, config) {
+      if (charts[id]) charts[id].destroy();
+      charts[id] = new Chart(document.getElementById(id), config);
+    }
+
+    async function loadStats() {
+      const { stats } = await API.get('/admin/stats');
+      document.getElementById('stat-tiles').innerHTML = `
+        <div class="stat-tile"><p class="text-xs uppercase text-slate-500">Revenue</p><p class="text-2xl font-black">£${Number(stats.revenue.total || 0).toFixed(2)}</p></div>
+        <div class="stat-tile"><p class="text-xs uppercase text-slate-500">Tickets sold</p><p class="text-2xl font-black">${stats.totals.ticketsSold}</p></div>
+        <div class="stat-tile"><p class="text-xs uppercase text-slate-500">Remaining</p><p class="text-2xl font-black">${stats.totals.remainingAll}</p></div>
+        <div class="stat-tile"><p class="text-xs uppercase text-slate-500">Registered : Guest</p><p class="text-2xl font-black">${stats.customers.registered} : ${stats.customers.guests}</p></div>
+      `;
+
+      const soldLabels = stats.soldByType.map((x) => x._id);
+      upsertChart('chart-sold', {
+        type: 'bar',
+        data: {
+          labels: soldLabels.length ? soldLabels : ['None'],
+          datasets: [
+            { label: 'Sold', data: stats.soldByType.map((x) => x.count).concat([]).length ? stats.soldByType.map((x) => x.count) : [0], backgroundColor: '#e11d48' },
+            { label: 'Revenue £', data: stats.soldByType.length ? stats.soldByType.map((x) => x.revenue) : [0], backgroundColor: '#0b1c2c' },
+          ],
+        },
+        options: { responsive: true, plugins: { legend: { position: 'bottom' } } },
+      });
+
+      const ageLabels = Object.keys(stats.attendeeAgeGroups);
+      upsertChart('chart-age', {
+        type: 'doughnut',
+        data: {
+          labels: ageLabels,
+          datasets: [{ data: ageLabels.map((k) => stats.attendeeAgeGroups[k]), backgroundColor: ['#fda4af','#fb7185','#e11d48','#9f1239','#0b1c2c'] }],
+        },
+        options: { plugins: { legend: { position: 'bottom' } } },
+      });
+      upsertChart('chart-customers', {
+        type: 'pie',
+        data: {
+          labels: ['Registered', 'Guest'],
+          datasets: [{ data: [stats.customers.registered, stats.customers.guests], backgroundColor: ['#0f766e', '#e11d48'] }],
+        },
+        options: { plugins: { legend: { position: 'bottom' } } },
+      });
+      upsertChart('chart-stock', {
+        type: 'bar',
+        data: {
+          labels: stats.inventory.map((i) => i.code),
+          datasets: [{ label: 'Remaining', data: stats.inventory.map((i) => i.remainingStock), backgroundColor: '#38bdf8' }],
+        },
+        options: { plugins: { legend: { display: false } } },
+      });
+    }
+
+    async function loadTypes() {
+      const { ticketTypes } = await API.get('/admin/ticket-types');
+      document.getElementById('types-list').innerHTML = ticketTypes.map((t) => `
+        <form class="type-form rounded-2xl border border-slate-200 bg-white p-4 space-y-3" data-id="${t._id}">
+          <div class="flex items-center justify-between gap-2">
+            <h3 class="font-extrabold">${t.code}</h3>
+            <span class="badge">${t.remainingStock} / ${t.totalStock} left</span>
+          </div>
+          <label class="block text-sm font-semibold">Name <input class="input-field mt-1" name="name" value="${t.name.replace(/"/g, '&quot;')}" required /></label>
+          <label class="block text-sm font-semibold">Price (£) <input class="input-field mt-1" name="price" type="number" step="0.01" min="0" value="${t.price}" required /></label>
+          <label class="block text-sm font-semibold">Description <textarea class="input-field mt-1 min-h-[80px]" name="description">${t.description || ''}</textarea></label>
+          <div class="grid grid-cols-2 gap-3">
+            <label class="block text-sm font-semibold">Total stock <input class="input-field mt-1" name="totalStock" type="number" min="0" value="${t.totalStock}" /></label>
+            <label class="block text-sm font-semibold">Remaining <input class="input-field mt-1" name="remainingStock" type="number" min="0" value="${t.remainingStock}" /></label>
+          </div>
+          <div class="grid grid-cols-2 gap-3">
+            <label class="block text-sm font-semibold">Max attendees <input class="input-field mt-1" name="maxAttendees" type="number" min="1" max="5" value="${t.maxAttendees}" /></label>
+            <div class="flex flex-col justify-end gap-2 text-sm pb-1">
+              <label class="flex items-center gap-2"><input type="checkbox" name="isRefundable" ${t.isRefundable ? 'checked' : ''}/> Refundable</label>
+              <label class="flex items-center gap-2"><input type="checkbox" name="isAmendable" ${t.isAmendable ? 'checked' : ''}/> Amendable</label>
+            </div>
+          </div>
+          <button class="btn-primary w-full sm:w-auto" type="submit">Save ${t.code}</button>
+        </form>
+      `).join('');
+
+      document.querySelectorAll('.type-form').forEach((form) => {
+        form.onsubmit = async (e) => {
+          e.preventDefault();
+          const fd = new FormData(form);
+          try {
+            const res = await API.patch(`/admin/ticket-types/${form.dataset.id}`, {
+              name: fd.get('name'),
+              price: Number(fd.get('price')),
+              description: fd.get('description'),
+              totalStock: Number(fd.get('totalStock')),
+              remainingStock: Number(fd.get('remainingStock')),
+              maxAttendees: Number(fd.get('maxAttendees')),
+              isRefundable: form.querySelector('[name=isRefundable]').checked,
+              isAmendable: form.querySelector('[name=isAmendable]').checked,
+            });
+            flash(res.message || 'Saved', true);
+            await Promise.all([loadTypes(), loadStats()]);
+          } catch (err) { flash(err.message, false); }
+        };
+      });
+    }
+
+    async function loadDiscounts() {
+      const { discounts } = await API.get('/admin/discounts');
+      document.getElementById('discounts-list').innerHTML = discounts.map((d) => `
+        <form class="discount-form rounded-xl border border-slate-200 bg-white p-4 grid gap-2 sm:grid-cols-2" data-id="${d._id}">
+          <input class="input-field" name="name" value="${d.name.replace(/"/g, '&quot;')}" />
+          <input class="input-field" name="percentOff" type="number" min="0" max="100" value="${d.percentOff}" />
+          <input class="input-field" name="startDate" type="date" value="${d.startDate.slice(0, 10)}" />
+          <input class="input-field" name="endDate" type="date" value="${d.endDate.slice(0, 10)}" />
+          <label class="flex items-center gap-2 text-sm"><input type="checkbox" name="isActive" ${d.isActive ? 'checked' : ''}/> Active</label>
+          <label class="flex items-center gap-2 text-sm"><input type="checkbox" name="registeredOnly" ${d.registeredOnly ? 'checked' : ''}/> Registered only</label>
+          <button class="btn-secondary text-sm" type="submit">Save</button>
+          <button class="btn-ghost text-sm" type="button" data-del="${d._id}">Delete</button>
+        </form>
+      `).join('') || '<p class="text-slate-500">No discounts yet.</p>';
+
+      document.querySelectorAll('.discount-form').forEach((form) => {
+        form.onsubmit = async (e) => {
+          e.preventDefault();
+          const fd = new FormData(form);
+          try {
+            const res = await API.patch(`/admin/discounts/${form.dataset.id}`, {
+              name: fd.get('name'),
+              percentOff: Number(fd.get('percentOff')),
+              startDate: fd.get('startDate'),
+              endDate: fd.get('endDate'),
+              isActive: form.querySelector('[name=isActive]').checked,
+              registeredOnly: form.querySelector('[name=registeredOnly]').checked,
+            });
+            flash(res.message, true);
+            loadDiscounts();
+          } catch (err) { flash(err.message, false); }
+        };
+      });
+      document.querySelectorAll('[data-del]').forEach((btn) => {
+        btn.onclick = async () => {
+          if (!confirm('Delete this discount?')) return;
+          try {
+            await API.delete(`/admin/discounts/${btn.dataset.del}`);
+            flash('Discount deleted', true);
+            loadDiscounts();
+          } catch (err) { flash(err.message, false); }
+        };
+      });
+    }
+
+    document.getElementById('discount-create').onsubmit = async (e) => {
+      e.preventDefault();
+      const fd = new FormData(e.target);
+      try {
+        await API.post('/admin/discounts', {
+          name: fd.get('name'),
+          percentOff: Number(fd.get('percentOff')),
+          startDate: fd.get('startDate'),
+          endDate: fd.get('endDate'),
+          registeredOnly: e.target.registeredOnly.checked,
+        });
+        flash('Discount created', true);
+        e.target.reset();
+        loadDiscounts();
+      } catch (err) { flash(err.message, false); }
+    };
+
+    async function loadUsers() {
+      const me = Auth.getUser();
+      const { users } = await API.get('/admin/users');
+      document.getElementById('users-body').innerHTML = users.map((u) => `
+        <tr class="border-t border-slate-100" data-uid="${u._id}">
+          <td class="p-3">
+            <input class="input-field min-h-0 py-2" name="firstName" value="${(u.firstName || '').replace(/"/g, '&quot;')}" />
+            <input class="input-field min-h-0 py-2 mt-1" name="lastName" value="${(u.lastName || '').replace(/"/g, '&quot;')}" />
+          </td>
+          <td class="p-3">${u.email}</td>
+          <td class="p-3">
+            <select name="role" class="input-field min-h-0 py-2">
+              <option value="customer" ${u.role === 'customer' ? 'selected' : ''}>customer</option>
+              <option value="admin" ${u.role === 'admin' ? 'selected' : ''}>admin</option>
+            </select>
+          </td>
+          <td class="p-3">${u.isGuest ? 'Yes' : 'No'}</td>
+          <td class="p-3">
+            <div class="flex flex-col gap-2 min-w-[7rem]">
+              <button type="button" class="btn-secondary text-sm px-3 py-2 min-h-0" data-save-user="${u._id}">Save</button>
+              ${me && me.id === u._id ? '<span class="text-xs text-slate-400">You (use My Tickets to delete self)</span>' : `
+              <button type="button" class="btn-ghost text-sm px-3 py-2 min-h-0 text-rose-700 border-rose-200" data-delete-user="${u._id}" data-email="${(u.email || '').replace(/"/g, '&quot;')}">Delete</button>`}
+            </div>
+          </td>
+        </tr>
+      `).join('');
+
+      document.querySelectorAll('[data-save-user]').forEach((btn) => {
+        btn.onclick = async () => {
+          const row = btn.closest('tr');
+          try {
+            await API.patch(`/admin/users/${btn.dataset.saveUser}`, {
+              firstName: row.querySelector('[name=firstName]').value,
+              lastName: row.querySelector('[name=lastName]').value,
+              role: row.querySelector('[name=role]').value,
+            });
+            flash('User updated', true);
+          } catch (err) { flash(err.message, false); }
+        };
+      });
+
+      document.querySelectorAll('[data-delete-user]').forEach((btn) => {
+        btn.onclick = async () => {
+          const email = btn.dataset.email;
+          if (!confirm(`Delete ${email} permanently?\n\nThis also deletes their tickets, orders, and payments from the database.`)) return;
+          try {
+            const res = await API.delete(`/admin/users/${btn.dataset.deleteUser}`);
+            flash(res.message, true);
+            await refresh();
+          } catch (err) { flash(err.message, false); }
+        };
+      });
+    }
+
+    function toDateInput(d) {
+      const x = new Date(d);
+      if (Number.isNaN(x.getTime())) return '';
+      return x.toISOString().slice(0, 10);
+    }
+
+    function openTicketEdit(ticket) {
+      const form = document.getElementById('ticket-edit-form');
+      form.id.value = ticket._id;
+      form.status.value = ticket.status;
+      form.amountPaid.value = ticket.amountPaid;
+      document.getElementById('attendee-edit-fields').innerHTML = (ticket.attendees || []).map((a, i) => `
+        <fieldset class="rounded-xl border p-3">
+          <legend class="text-sm font-bold px-1">Attendee ${i + 1}</legend>
+          <input class="input-field mt-1" name="fn_${i}" value="${a.firstName}" placeholder="First name" required />
+          <input class="input-field mt-1" name="ln_${i}" value="${a.lastName}" placeholder="Last name" required />
+          <input class="input-field mt-1" name="dob_${i}" type="date" value="${toDateInput(a.dateOfBirth)}" required />
+        </fieldset>
+      `).join('');
+      form.dataset.attendeeCount = String((ticket.attendees || []).length);
+      document.getElementById('ticket-modal').classList.remove('hidden');
+    }
+
+    document.getElementById('ticket-modal-close').onclick = () => {
+      document.getElementById('ticket-modal').classList.add('hidden');
+    };
+
+    document.getElementById('ticket-edit-form').onsubmit = async (e) => {
+      e.preventDefault();
+      const form = e.target;
+      const n = Number(form.dataset.attendeeCount || 0);
+      const attendees = [];
+      for (let i = 0; i < n; i++) {
+        attendees.push({
+          firstName: form[`fn_${i}`].value,
+          lastName: form[`ln_${i}`].value,
+          dateOfBirth: form[`dob_${i}`].value,
+        });
+      }
+      try {
+        const res = await API.patch(`/admin/tickets/${form.id.value}`, {
+          status: form.status.value,
+          amountPaid: Number(form.amountPaid.value),
+          attendees,
+        });
+        flash(res.message, true);
+        document.getElementById('ticket-modal').classList.add('hidden');
+        loadTickets();
+      } catch (err) { flash(err.message, false); }
+    };
+
+    async function loadTickets() {
+      const { tickets } = await API.get('/admin/tickets');
+      cachedTickets = tickets;
+      document.getElementById('tickets-admin').innerHTML = tickets.map((t) => `
+        <article class="rounded-xl border border-slate-200 bg-white p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+          <div>
+            <p class="font-mono font-bold text-sm">${t.ticketNumber}</p>
+            <p class="text-sm">${t.ticketType?.name || t.ticketTypeCode} · ${t.status}</p>
+            <p class="text-xs text-slate-500">${t.user?.email || ''} · £${Number(t.amountPaid).toFixed(2)}</p>
+            <p class="text-xs text-slate-500">${(t.attendees || []).map((a) => a.firstName + ' ' + a.lastName).join(', ')}</p>
+          </div>
+          <div class="flex flex-wrap gap-2">
+            <button class="btn-ghost text-sm" data-edit="${t._id}" type="button">Edit</button>
+            ${t.status !== 'cancelled' ? `
+              <button class="btn-ghost text-sm" data-acancel="${t._id}" type="button">Cancel</button>
+              <button class="btn-secondary text-sm" data-aamend="${t._id}" type="button">Upgrade VIP</button>
+            ` : ''}
+          </div>
+        </article>
+      `).join('') || '<p class="text-slate-500">No tickets sold yet.</p>';
+
+      document.querySelectorAll('[data-edit]').forEach((btn) => {
+        btn.onclick = () => {
+          const t = cachedTickets.find((x) => x._id === btn.dataset.edit);
+          if (t) openTicketEdit(t);
+        };
+      });
+      document.querySelectorAll('[data-acancel]').forEach((btn) => {
+        btn.onclick = async () => {
+          try {
+            const res = await API.post(`/admin/tickets/${btn.dataset.acancel}/cancel`, { force: true });
+            flash(res.message, true);
+            await refresh();
+          } catch (e) { flash(e.message, false); }
+        };
+      });
+      document.querySelectorAll('[data-aamend]').forEach((btn) => {
+        btn.onclick = async () => {
+          try {
+            const res = await API.post(`/admin/tickets/${btn.dataset.aamend}/amend`, { newTicketTypeCode: 'VIP' });
+            flash(res.message, true);
+            await refresh();
+          } catch (e) { flash(e.message, false); }
+        };
+      });
+    }
+
+    async function loadDataBrowser() {
+      const data = await API.get('/admin/data');
+      cachedData = data;
+      document.getElementById('data-counts').innerHTML = Object.entries(data.counts).map(([k, v]) => `
+        <div class="stat-tile text-center">
+          <p class="text-xs uppercase text-slate-500">${k}</p>
+          <p class="text-xl font-black">${v}</p>
+        </div>
+      `).join('');
+
+      const keys = Object.keys(data.collections);
+      document.getElementById('data-tabs').innerHTML = keys.map((k, i) => `
+        <button type="button" data-col="${k}" class="data-col-btn ${i === 0 ? 'btn-primary' : 'btn-ghost'} text-sm px-3 py-2 min-h-0">${k}</button>
+      `).join('');
+
+      const show = (key) => {
+        document.getElementById('data-json').textContent = JSON.stringify(data.collections[key], null, 2);
+        document.querySelectorAll('.data-col-btn').forEach((b) => {
+          b.classList.toggle('btn-primary', b.dataset.col === key);
+          b.classList.toggle('btn-ghost', b.dataset.col !== key);
+        });
+      };
+      show(keys[0]);
+      document.querySelectorAll('.data-col-btn').forEach((b) => {
+        b.onclick = () => show(b.dataset.col);
+      });
+    }
+
+    document.getElementById('lookup-form').onsubmit = async (e) => {
+      e.preventDefault();
+      const q = document.getElementById('lookup-q').value.trim();
+      try {
+        const { ticket } = await API.get(`/admin/tickets/lookup?q=${encodeURIComponent(q)}`);
+        document.getElementById('lookup-result').innerHTML = `
+          <div class="rounded-xl bg-slate-50 p-4 flex flex-col sm:flex-row gap-4">
+            <img src="${ticket.qrDataUrl}" class="w-32 h-32 rounded-lg border" alt="QR" />
+            <div>
+              <p class="font-mono font-bold">${ticket.ticketNumber}</p>
+              <p>${ticket.ticketTypeCode} · ${ticket.status}</p>
+              <p class="text-sm text-slate-600">${ticket.user?.email} — ${ticket.attendees.map((a) => a.firstName + ' ' + a.lastName).join(', ')}</p>
+              <p class="text-sm mt-1">Paid £${Number(ticket.amountPaid).toFixed(2)}</p>
+              <button type="button" class="btn-secondary text-sm mt-2" id="lookup-edit">Edit this ticket</button>
+            </div>
+          </div>`;
+        document.getElementById('lookup-edit').onclick = () => openTicketEdit(ticket);
+      } catch (err) {
+        document.getElementById('lookup-result').innerHTML = `<p class="text-rose-700">${err.message}</p>`;
+      }
+    };
+
+    async function refresh() {
+      await Promise.all([loadStats(), loadTypes(), loadDiscounts(), loadUsers(), loadTickets()]);
+    }
+    refresh().catch((e) => flash(e.message, false));
+  </script>
+</body>
+</html>

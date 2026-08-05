@@ -1,0 +1,104 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <title>Verify email — O2 Tickets</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="stylesheet" href="/css/styles.css" />
+</head>
+<body>
+  <div id="site-nav"></div>
+  <main class="mx-auto max-w-md px-4 py-10">
+    <h1 class="text-2xl font-extrabold tracking-tight" data-content="auth.verifyTitle">Verify your email</h1>
+    <p class="mt-2 text-slate-600" data-content="auth.verifyHelp">Enter the 6-digit code we sent, or open the link from your email.</p>
+    <p id="msg" class="hidden mt-4 rounded-xl p-3 text-sm"></p>
+    <div id="email-preview" class="hidden mt-4"></div>
+
+    <form id="verify-form" class="mt-6 space-y-3 fade-in">
+      <input class="input-field" name="email" type="email" placeholder="Email" required />
+      <input class="input-field tracking-[0.35em] text-center text-xl font-bold" name="otp" inputmode="numeric" pattern="[0-9]{6}" maxlength="6" placeholder="••••••" />
+      <button class="btn-primary w-full" type="submit">Verify & continue</button>
+    </form>
+
+    <button id="resend-btn" type="button" class="btn-ghost w-full mt-3" data-content="auth.resendLabel">Resend verification email</button>
+    <p class="mt-6 text-sm text-slate-500">Already verified? <a class="text-rose-700 font-semibold underline" href="/pages/auth.html">Log in</a></p>
+  </main>
+
+  <script src="/js/api.js"></script>
+  <script src="/js/auth.js"></script>
+  <script src="/js/cart.js"></script>
+  <script src="/js/content.js"></script>
+  <script src="/js/emailPreview.js"></script>
+  <script src="/js/nav.js"></script>
+  <script>
+    initNav('');
+    loadSiteContent();
+
+    const params = new URLSearchParams(location.search);
+    const form = document.getElementById('verify-form');
+    if (params.get('email')) form.email.value = params.get('email');
+    else if (sessionStorage.getItem('pendingVerifyEmail')) {
+      form.email.value = sessionStorage.getItem('pendingVerifyEmail');
+    }
+    showEmailPreview('email-preview', {
+      demoOtp: sessionStorage.getItem('pendingDemoOtp'),
+      emailPreviewUrl: sessionStorage.getItem('pendingEmailPreview'),
+    });
+    if (sessionStorage.getItem('pendingDemoOtp')) {
+      form.otp.value = sessionStorage.getItem('pendingDemoOtp');
+    }
+
+    function show(text, ok = false) {
+      const el = document.getElementById('msg');
+      el.textContent = text;
+      el.className = `mt-4 rounded-xl p-3 text-sm ${ok ? 'bg-teal-50 text-teal-800' : 'bg-rose-50 text-rose-800'}`;
+      el.classList.remove('hidden');
+    }
+
+    // Auto-verify via link token
+    (async () => {
+      const token = params.get('token');
+      const email = params.get('email');
+      if (token && email) {
+        try {
+          const data = await API.post('/auth/verify', { email, token });
+          Auth.setSession(data.token, data.user);
+          show(data.message, true);
+          setTimeout(() => { location.href = '/pages/tickets.html'; }, 800);
+        } catch (err) {
+          show(err.message, false);
+        }
+      }
+    })();
+
+    form.onsubmit = async (e) => {
+      e.preventDefault();
+      try {
+        const data = await API.post('/auth/verify', {
+          email: form.email.value.trim(),
+          otp: form.otp.value.trim(),
+        });
+        Auth.setSession(data.token, data.user);
+        show(data.message, true);
+        setTimeout(() => { location.href = '/pages/tickets.html'; }, 800);
+      } catch (err) {
+        show(err.message, false);
+      }
+    };
+
+    document.getElementById('resend-btn').onclick = async () => {
+      const email = form.email.value.trim();
+      if (!email) return show('Enter your email first.', false);
+      try {
+        const data = await API.post('/auth/resend-verification', { email });
+        show(data.message, true);
+        showEmailPreview('email-preview', data);
+        if (data.demoOtp) form.otp.value = data.demoOtp;
+      } catch (err) {
+        show(err.message, false);
+      }
+    };
+  </script>
+</body>
+</html>

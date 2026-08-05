@@ -1,0 +1,115 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <title>Checkout — O2 Tickets</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="stylesheet" href="/css/styles.css" />
+</head>
+<body>
+  <div id="site-nav"></div>
+  <main class="mx-auto max-w-xl px-4 py-8">
+    <h1 class="text-2xl font-extrabold">Checkout</h1>
+    <p class="mt-2 text-slate-600">Confirm your contact details, then continue to simulated card payment.</p>
+
+    <section class="mt-6 rounded-2xl border border-slate-200 bg-white p-4 space-y-3">
+      <h2 class="font-bold">Your details</h2>
+      <div class="grid gap-3 sm:grid-cols-2">
+        <label class="text-sm font-semibold block">First name
+          <input id="firstName" class="input-field mt-1" />
+        </label>
+        <label class="text-sm font-semibold block">Last name
+          <input id="lastName" class="input-field mt-1" />
+        </label>
+      </div>
+      <label class="text-sm font-semibold block">Email
+        <input id="email" class="input-field mt-1" type="email" required />
+      </label>
+      <label class="text-sm font-semibold block">Phone <span class="font-normal text-slate-500">(optional)</span>
+        <input id="phone" class="input-field mt-1" type="tel" />
+      </label>
+      <p id="account-note" class="text-xs text-slate-500"></p>
+    </section>
+
+    <div id="summary" class="mt-6 space-y-3"></div>
+    <p id="err" class="hidden mt-4 text-rose-700 text-sm"></p>
+    <button id="place-order" class="btn-primary w-full mt-6 min-h-[48px]" type="button">Continue to payment</button>
+  </main>
+  <script src="/js/api.js"></script>
+  <script src="/js/auth.js"></script>
+  <script src="/js/cart.js"></script>
+  <script src="/js/nav.js"></script>
+  <script>
+    initNav('cart');
+    if (!Auth.requireAuth('/pages/auth.html')) throw new Error('auth');
+
+    const items = Cart.get();
+    if (!items.length) location.href = '/pages/cart.html';
+
+    const user = Auth.getUser();
+    const fn = document.getElementById('firstName');
+    const ln = document.getElementById('lastName');
+    const email = document.getElementById('email');
+    const phone = document.getElementById('phone');
+    const note = document.getElementById('account-note');
+
+    if (user) {
+      fn.value = user.firstName || '';
+      ln.value = user.lastName || '';
+      email.value = user.email || '';
+      phone.value = user.phone || '';
+      if (!user.isGuest) {
+        // Logged-in: pre-filled from account; email locked to account identity
+        email.readOnly = true;
+        email.classList.add('bg-slate-50');
+        note.textContent = 'Name and email are loaded from your account. Phone is optional.';
+      } else {
+        note.textContent = 'Guest checkout — email is required; phone is optional. Attendee names are on each ticket in your cart.';
+      }
+    }
+
+    const summary = document.getElementById('summary');
+    const sub = items.reduce((s, i) => s + i.price, 0);
+    summary.innerHTML = items.map((i) => `
+      <div class="rounded-xl border border-slate-200 bg-white p-4">
+        <div class="font-bold">${i.name}</div>
+        <div class="text-sm text-slate-600">${i.attendees.map((a) => a.firstName + ' ' + a.lastName).join(', ')}</div>
+        <div class="mt-1 font-semibold">£${i.price.toFixed(2)}</div>
+      </div>`).join('') + `
+      <div class="rounded-xl bg-slate-900 text-white p-4 flex justify-between font-bold">
+        <span>Subtotal</span><span>£${sub.toFixed(2)}</span>
+      </div>
+      <p class="text-sm text-slate-500">Seasonal discount (if eligible) is applied when the order is created. Ticket email goes to ${user?.email || 'your checkout email'}.</p>`;
+
+    document.getElementById('place-order').onclick = async () => {
+      const err = document.getElementById('err');
+      err.classList.add('hidden');
+      if (!email.value.trim()) {
+        err.textContent = 'Email is required.';
+        err.classList.remove('hidden');
+        return;
+      }
+      try {
+        // Keep session contact fields in sync (guest name optional polish)
+        if (user?.isGuest) {
+          // no server profile update required — order emails use JWT user email
+        }
+        const payload = {
+          items: items.map((i) => ({
+            ticketTypeCode: i.ticketTypeCode,
+            attendees: i.attendees,
+          })),
+        };
+        const data = await API.post('/orders', payload);
+        sessionStorage.setItem('pendingOrderId', data.order._id);
+        sessionStorage.setItem('pendingOrderTotal', String(data.order.totalPaid));
+        location.href = '/pages/payment.html';
+      } catch (e) {
+        err.textContent = e.message;
+        err.classList.remove('hidden');
+      }
+    };
+  </script>
+</body>
+</html>

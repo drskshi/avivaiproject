@@ -1,0 +1,169 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <title>Sign in — O2 Tickets</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="stylesheet" href="/css/styles.css" />
+</head>
+<body>
+  <div id="site-nav"></div>
+
+  <main class="mx-auto max-w-lg px-4 py-8">
+    <h1 class="text-2xl sm:text-3xl font-extrabold tracking-tight fade-in">Account</h1>
+    <p class="mt-2 text-slate-600">Register (verify email), log in, or continue as guest with just an email.</p>
+
+    <div class="mt-6 flex gap-2 rounded-xl bg-slate-100 p-1">
+      <button type="button" data-tab="login" class="tab-btn flex-1 rounded-lg py-2.5 text-sm font-bold bg-white shadow min-h-[44px]">Log in</button>
+      <button type="button" data-tab="register" class="tab-btn flex-1 rounded-lg py-2.5 text-sm font-bold text-slate-600 min-h-[44px]">Register</button>
+      <button type="button" data-tab="guest" class="tab-btn flex-1 rounded-lg py-2.5 text-sm font-bold text-slate-600 min-h-[44px]">Guest</button>
+    </div>
+
+    <p id="auth-msg" class="hidden mt-4 rounded-xl p-3 text-sm"></p>
+    <div id="email-preview" class="hidden mt-4"></div>
+    <div id="unverified-box" class="hidden mt-4 rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-950">
+      <p class="font-bold" data-content="auth.unverifiedLogin">Please verify your email before logging in.</p>
+      <p class="mt-1">We can resend your code, or open the verify page.</p>
+      <div class="mt-3 flex flex-col sm:flex-row gap-2">
+        <button type="button" id="resend-from-login" class="btn-secondary text-sm min-h-[44px]" data-content="auth.resendLabel">Resend verification email</button>
+        <a id="goto-verify" href="/pages/verify.html" class="btn-ghost text-sm min-h-[44px]">Enter OTP</a>
+      </div>
+    </div>
+
+    <form id="login-form" class="mt-5 space-y-3 fade-in">
+      <input class="input-field" name="email" type="email" placeholder="Email" required autocomplete="email" />
+      <input class="input-field" name="password" type="password" placeholder="Password" required minlength="6" autocomplete="current-password" />
+      <button class="btn-primary w-full min-h-[48px]" type="submit">Log in</button>
+      <a href="/pages/forgot-password.html" class="btn-ghost w-full min-h-[48px] text-center text-rose-700 border-rose-200">
+        Forgot password?
+      </a>
+      <p class="text-center text-sm text-slate-500">
+        Lost access?
+        <a href="/pages/forgot-password.html" class="font-semibold text-rose-700 underline">Reset your password here</a>
+      </p>
+    </form>
+
+    <form id="register-form" class="mt-5 space-y-3 hidden">
+      <div class="grid gap-3 sm:grid-cols-2">
+        <input class="input-field" name="firstName" placeholder="First name" required />
+        <input class="input-field" name="lastName" placeholder="Last name" required />
+      </div>
+      <input class="input-field" name="email" type="email" placeholder="Email" required />
+      <input class="input-field" name="password" type="password" placeholder="Password (min 6)" required minlength="6" />
+      <input class="input-field" name="phone" type="tel" placeholder="Phone (optional)" />
+      <button class="btn-primary w-full" type="submit">Create account</button>
+      <p class="text-xs text-slate-500">We’ll email a 6-digit code. Login stays blocked until you verify.</p>
+    </form>
+
+    <form id="guest-form" class="mt-5 space-y-3 hidden">
+      <p class="text-sm text-amber-800 bg-amber-50 border border-amber-200 rounded-xl p-3">
+        Guest checkout needs <strong>only an email</strong>. Phone is optional. Guest tickets are <strong>not refundable</strong>.
+      </p>
+      <input class="input-field" name="email" type="email" placeholder="Email (required)" required />
+      <input class="input-field" name="phone" type="tel" placeholder="Phone (optional)" />
+      <button class="btn-secondary w-full" type="submit">Continue as guest</button>
+    </form>
+  </main>
+
+  <script src="/js/api.js"></script>
+  <script src="/js/auth.js"></script>
+  <script src="/js/cart.js"></script>
+  <script src="/js/content.js"></script>
+  <script src="/js/emailPreview.js"></script>
+  <script src="/js/nav.js"></script>
+  <script>
+    initNav('');
+    loadSiteContent();
+    const params = new URLSearchParams(location.search);
+    const next = params.get('next') || '/pages/tickets.html';
+    let pendingEmail = '';
+
+    function showMsg(text, ok = false) {
+      const el = document.getElementById('auth-msg');
+      el.textContent = text;
+      el.className = `mt-4 rounded-xl p-3 text-sm ${ok ? 'bg-teal-50 text-teal-800' : 'bg-rose-50 text-rose-800'}`;
+      el.classList.remove('hidden');
+    }
+
+    function showUnverified(email) {
+      pendingEmail = email;
+      document.getElementById('unverified-box').classList.remove('hidden');
+      document.getElementById('goto-verify').href = `/pages/verify.html?email=${encodeURIComponent(email)}`;
+    }
+
+    document.querySelectorAll('.tab-btn').forEach((btn) => {
+      btn.addEventListener('click', () => {
+        document.querySelectorAll('.tab-btn').forEach((b) => {
+          b.classList.remove('bg-white', 'shadow');
+          b.classList.add('text-slate-600');
+        });
+        btn.classList.add('bg-white', 'shadow');
+        btn.classList.remove('text-slate-600');
+        ['login', 'register', 'guest'].forEach((t) => {
+          document.getElementById(`${t}-form`).classList.toggle('hidden', btn.dataset.tab !== t);
+        });
+        document.getElementById('unverified-box').classList.add('hidden');
+      });
+    });
+
+    document.getElementById('login-form').onsubmit = async (e) => {
+      e.preventDefault();
+      document.getElementById('unverified-box').classList.add('hidden');
+      const fd = new FormData(e.target);
+      const body = Object.fromEntries(fd);
+      try {
+        const data = await API.post('/auth/login', body);
+        Auth.setSession(data.token, data.user);
+        showMsg('Success — redirecting…', true);
+        setTimeout(() => { location.href = next; }, 400);
+      } catch (err) {
+        showMsg(err.message);
+        if (err.data?.requiresVerification || err.data?.code === 'UNVERIFIED') {
+          showUnverified(body.email || err.data?.email || '');
+        }
+      }
+    };
+
+    document.getElementById('register-form').onsubmit = async (e) => {
+      e.preventDefault();
+      const fd = new FormData(e.target);
+      const body = Object.fromEntries(fd);
+      try {
+        const data = await API.post('/auth/register', body);
+        showMsg(data.message, true);
+        showEmailPreview('email-preview', data);
+        showUnverified(body.email);
+        // Keep user on page briefly so they can open the preview / copy OTP
+        sessionStorage.setItem('pendingVerifyEmail', body.email);
+        if (data.demoOtp) sessionStorage.setItem('pendingDemoOtp', data.demoOtp);
+        if (data.emailPreviewUrl) sessionStorage.setItem('pendingEmailPreview', data.emailPreviewUrl);
+        setTimeout(() => {
+          location.href = `/pages/verify.html?email=${encodeURIComponent(body.email)}`;
+        }, data.emailPreviewUrl || data.demoOtp ? 2500 : 600);
+      } catch (err) { showMsg(err.message); }
+    };
+
+    document.getElementById('guest-form').onsubmit = async (e) => {
+      e.preventDefault();
+      const fd = new FormData(e.target);
+      try {
+        const data = await API.post('/auth/guest', Object.fromEntries(fd));
+        Auth.setSession(data.token, data.user);
+        showMsg('Guest session ready — redirecting…', true);
+        setTimeout(() => { location.href = next; }, 400);
+      } catch (err) { showMsg(err.message); }
+    };
+
+    document.getElementById('resend-from-login').onclick = async () => {
+      const email = pendingEmail || document.querySelector('#login-form [name=email]')?.value;
+      if (!email) return showMsg('Enter your email first.');
+      try {
+        const data = await API.post('/auth/resend-verification', { email });
+        showMsg(data.message, true);
+        showEmailPreview('email-preview', data);
+      } catch (err) { showMsg(err.message); }
+    };
+  </script>
+</body>
+</html>

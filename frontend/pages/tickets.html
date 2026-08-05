@@ -1,0 +1,180 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <title>Choose tickets — O2 Tickets</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="stylesheet" href="/css/styles.css" />
+</head>
+<body>
+  <div id="site-nav"></div>
+
+  <main class="mx-auto max-w-6xl px-4 py-8">
+    <header class="mb-6 fade-in">
+      <h1 class="text-2xl sm:text-3xl font-extrabold tracking-tight">Ticket types</h1>
+      <p id="discount-banner" class="mt-2 text-slate-600">Loading live stock…</p>
+    </header>
+
+    <div id="ticket-grid" class="grid gap-4 sm:grid-cols-2"></div>
+    <p id="ticket-error" class="hidden mt-4 text-rose-700"></p>
+  </main>
+
+  <!-- Attendee modal -->
+  <div id="modal" class="hidden fixed inset-0 z-50 bg-black/50 p-4 overflow-y-auto">
+    <div class="mx-auto my-8 max-w-lg rounded-2xl bg-white p-5 sm:p-6 shadow-xl">
+      <h2 id="modal-title" class="text-xl font-extrabold">Add attendees</h2>
+      <p id="modal-help" class="mt-1 text-sm text-slate-600"></p>
+      <form id="attendee-form" class="mt-4 space-y-3"></form>
+      <div class="mt-5 flex flex-col sm:flex-row gap-2">
+        <button type="submit" form="attendee-form" class="btn-primary flex-1">Add to cart</button>
+        <button type="button" id="modal-close" class="btn-ghost flex-1">Cancel</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="/js/api.js"></script>
+  <script src="/js/auth.js"></script>
+  <script src="/js/cart.js"></script>
+  <script src="/js/content.js"></script>
+  <script src="/js/nav.js"></script>
+  <script>
+    initNav('tickets');
+    loadSiteContent();
+    let selectedType = null;
+
+    function money(n) {
+      return `£${Number(n).toFixed(2)}`;
+    }
+
+    function openModal(type) {
+      selectedType = type;
+      const modal = document.getElementById('modal');
+      document.getElementById('modal-title').textContent = type.name;
+      const max = type.maxAttendees;
+      document.getElementById('modal-help').textContent =
+        type.code === 'GROUP_STANDARD'
+          ? `Group ticket: enter 1–${max} attendees (flat ${money(type.price)}). Children need an adult on the order.`
+          : `Enter the adult attendee for this ticket.`;
+
+      const form = document.getElementById('attendee-form');
+      const count = type.code === 'GROUP_STANDARD' ? max : 1;
+      form.innerHTML = `
+        ${type.code === 'GROUP_STANDARD' ? `
+          <label class="block text-sm font-semibold">Number of people (1–${max})
+            <input id="group-count" class="input-field mt-1" type="number" min="1" max="${max}" value="2" required />
+          </label>` : ''}
+        <div id="attendee-fields"></div>
+      `;
+
+      function renderFields(n) {
+        const wrap = document.getElementById('attendee-fields');
+        wrap.innerHTML = Array.from({ length: n }, (_, i) => `
+          <fieldset class="rounded-xl border border-slate-200 p-3">
+            <legend class="px-1 text-sm font-bold">Person ${i + 1}</legend>
+            <div class="grid gap-2 sm:grid-cols-2">
+              <input name="firstName_${i}" class="input-field" placeholder="First name" required />
+              <input name="lastName_${i}" class="input-field" placeholder="Last name" required />
+              <label class="sm:col-span-2 text-sm">Date of birth
+                <input name="dob_${i}" type="date" class="input-field mt-1" required />
+              </label>
+            </div>
+          </fieldset>
+        `).join('');
+      }
+
+      if (type.code === 'GROUP_STANDARD') {
+        const gc = document.getElementById('group-count');
+        renderFields(Number(gc.value));
+        gc.addEventListener('change', () => {
+          const n = Math.min(max, Math.max(1, Number(gc.value) || 1));
+          gc.value = n;
+          renderFields(n);
+        });
+      } else {
+        renderFields(1);
+      }
+
+      modal.classList.remove('hidden');
+    }
+
+    document.getElementById('modal-close').onclick = () => {
+      document.getElementById('modal').classList.add('hidden');
+    };
+
+    document.getElementById('attendee-form').addEventListener('submit', (e) => {
+      e.preventDefault();
+      const form = e.target;
+      let n = 1;
+      if (selectedType.code === 'GROUP_STANDARD') {
+        n = Number(document.getElementById('group-count').value);
+      }
+      const attendees = [];
+      for (let i = 0; i < n; i++) {
+        attendees.push({
+          firstName: form[`firstName_${i}`].value.trim(),
+          lastName: form[`lastName_${i}`].value.trim(),
+          dateOfBirth: form[`dob_${i}`].value,
+        });
+      }
+      Cart.add({
+        ticketTypeCode: selectedType.code,
+        name: selectedType.name,
+        price: selectedType.price,
+        attendees,
+      });
+      document.getElementById('modal').classList.add('hidden');
+      window.location.href = '/pages/cart.html';
+    });
+
+    async function load() {
+      try {
+        const data = await API.get('/ticket-types');
+        const banner = document.getElementById('discount-banner');
+        if (data.discountPercent > 0) {
+          banner.innerHTML = `Registered early-bird: <strong>${data.discountPercent}% off</strong> applied at checkout.`;
+        } else if (Auth.isLoggedIn() && !Auth.isGuest()) {
+          banner.textContent = 'No early-bird discount this month — full price at checkout.';
+        } else {
+          const hint = (window.SiteContent?.discountsBanner?.guestHint) || 'Sign in as a registered (verified) user for seasonal discounts.';
+          banner.innerHTML = `${hint} <a class="text-rose-700 font-semibold underline" href="/pages/auth.html">Register / login</a>`;
+        }
+
+        const grid = document.getElementById('ticket-grid');
+        grid.innerHTML = data.ticketTypes.map((t) => `
+          <article class="ticket-card rounded-2xl p-5 fade-in">
+            <div class="flex items-start justify-between gap-3">
+              <h2 class="text-lg font-extrabold">${t.name}</h2>
+              <span class="badge ${t.remainingStock < 50 ? 'badge-hot' : ''}">${t.remainingStock} left</span>
+            </div>
+            <p class="mt-2 text-sm text-slate-600">${t.description}</p>
+            <p class="mt-4 text-2xl font-black">${money(t.price)}
+              ${data.discountPercent > 0 ? `<span class="text-sm font-semibold text-teal-700">→ ${money(t.discountedPrice)} for you</span>` : ''}
+            </p>
+            <ul class="mt-3 text-xs text-slate-500 space-y-1">
+              <li>${t.isRefundable ? 'Refundable' : 'Non-refundable'}</li>
+              <li>${t.isAmendable ? 'Amendable (upgrades)' : 'Non-amendable'}</li>
+              <li>Up to ${t.maxAttendees} attendee(s)</li>
+            </ul>
+            <button type="button" class="btn-primary w-full mt-4" data-code="${t.code}" ${t.remainingStock < 1 ? 'disabled' : ''}>
+              ${t.remainingStock < 1 ? 'Sold out' : 'Select'}
+            </button>
+          </article>
+        `).join('');
+
+        grid.querySelectorAll('button[data-code]').forEach((btn) => {
+          btn.addEventListener('click', () => {
+            const type = data.ticketTypes.find((x) => x.code === btn.dataset.code);
+            openModal(type);
+          });
+        });
+      } catch (err) {
+        document.getElementById('ticket-error').textContent = err.message;
+        document.getElementById('ticket-error').classList.remove('hidden');
+      }
+    }
+
+    load();
+  </script>
+</body>
+</html>
