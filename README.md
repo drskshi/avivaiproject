@@ -90,4 +90,5 @@ backend/   config, controllers, middleware, models, routes, seed, utils
 frontend/  css, js (api, auth, cart, content, nav), pages
 tests/
 .env.example
+PROJECT_REPORT.md   # full assignment report (features, schema, how to run)
 ```
